@@ -304,21 +304,28 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
     """
     # Log the prompt for debugging
     logger.info(f"PROMPT: {prompt}")
+    
+    # Show prompt preview in console (first 200 chars)
+    prompt_preview = prompt[:200].replace('\n', ' ') + ('...' if len(prompt) > 200 else '')
+    print(f"  📝 Prompt ({len(prompt)} chars): {prompt_preview}")
 
     # Check cache if enabled - avoids redundant API calls
     if use_cache:
         cache = load_cache()
         if prompt in cache:
             logger.info("CACHE HIT: Using cached response")
+            print(f"  💾❤️ Cache HIT - using cached response")
             return cache[prompt]
 
     # Check if local LLM override is set (user chose to use detected local LLM)
     local_override = get_local_llm_override()
     if local_override:
+        print(f"  🦙 Calling Ollama ({local_override['name']}) at {local_override['url']}...")
         response_text = _call_llm_local(prompt, local_override["url"])
     else:
         # Get the configured provider and route to appropriate function
         provider = get_llm_provider()
+        print(f"  ☁️  Calling {provider} API...")
         
         # Route to the correct provider-specific function
         # IMPORTANT: This order must match the priority in get_llm_provider()!
@@ -333,12 +340,17 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
 
     # Log the response for debugging
     logger.info(f"RESPONSE: {response_text}")
+    
+    # Show response preview in console
+    response_preview = response_text[:150].replace('\n', ' ') + ('...' if len(response_text) > 150 else '')
+    print(f"  ✅ Response ({len(response_text)} chars): {response_preview}")
 
     # Update cache if enabled
     if use_cache:
         cache = load_cache()
         cache[prompt] = response_text
         save_cache(cache)
+        print(f"  💾 Response cached")
 
     return response_text
 
@@ -541,10 +553,26 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     # Try to get model from environment or use a sensible default
     model = os.getenv(ENV_LLM_MODEL, DEFAULT_GENERIC_MODEL)
     
-    # First try the OpenAI-compatible endpoint (works with LM Studio, vLLM, etc.)
-    openai_url = f"{base_url.rstrip('/')}/v1/chat/completions"
-    
     headers = {"Content-Type": "application/json"}
+    
+    # Try Ollama /api/chat endpoint first (current Ollama API)
+    ollama_chat_url = f"{base_url.rstrip('/')}/api/chat"
+    ollama_chat_payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
+    
+    try:
+        print(f"  🔄 Sending to {ollama_chat_url} with model '{model}'...")
+        response = requests.post(ollama_chat_url, headers=headers, json=ollama_chat_payload, timeout=300)
+        response.raise_for_status()
+        return response.json()["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        print(f"  ⚠️  Ollama /api/chat failed: {e}")
+    
+    # Fall back to OpenAI-compatible endpoint (works with LM Studio, vLLM, etc.)
+    openai_url = f"{base_url.rstrip('/')}/v1/chat/completions"
     
     payload = {
         "model": model,
@@ -553,25 +581,10 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     }
     
     try:
-        response = requests.post(openai_url, headers=headers, json=payload, timeout=120)
+        print(f"  🔄 Trying OpenAI-compatible endpoint: {openai_url}...")
+        response = requests.post(openai_url, headers=headers, json=payload, timeout=300)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
-    except requests.exceptions.RequestException:
-        # Fall back to Ollama-specific endpoint
-        pass
-    
-    # Try Ollama-specific endpoint
-    ollama_url = f"{base_url.rstrip('/')}/api/generate"
-    ollama_payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-    }
-    
-    try:
-        response = requests.post(ollama_url, headers=headers, json=ollama_payload, timeout=120)
-        response.raise_for_status()
-        return response.json().get("response", "")
     except requests.exceptions.RequestException as e:
         raise Exception(f"Error calling local LLM at {base_url}: {e}")
 
