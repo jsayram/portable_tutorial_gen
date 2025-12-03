@@ -273,7 +273,7 @@ class IdentifyAbstractions(Node):
             max_abstraction_num,
         ) = prep_res
         
-        print(f"Identifying abstractions using LLM...")
+        print(f"\n📚 Step 1/4: Identifying abstractions...")
 
         # Add language instruction only if not English
         language_instruction = ""
@@ -478,7 +478,7 @@ class AnalyzeRelationships(Node):
             use_cache,
         ) = prep_res
         
-        print(f"Analyzing relationships using LLM...")
+        print(f"\n🔗 Step 2/4: Analyzing relationships...")
 
         # Language-specific instructions
         language_instruction = ""
@@ -670,7 +670,7 @@ class OrderChapters(Node):
             use_cache,
         ) = prep_res
         
-        print("Determining chapter order using LLM...")
+        print(f"\n📋 Step 3/4: Determining chapter order...")
         
         prompt = f"""
 Given the following project abstractions and their relationships for the project `{project_name}`:
@@ -860,7 +860,7 @@ class WriteChapters(BatchNode):
             else:
                 print(f"Warning: Invalid abstraction index {abstraction_index}. Skipping.")
 
-        print(f"Preparing to write {len(items_to_process)} chapters...")
+        print(f"\n✍️  Step 4/4: Writing {len(items_to_process)} chapters...")
         return items_to_process
 
     def exec(self, item):
@@ -876,7 +876,7 @@ class WriteChapters(BatchNode):
         language = item.get("language", DEFAULT_LANGUAGE)
         use_cache = item.get("use_cache", True)
         
-        print(f"Writing chapter {chapter_num} for: {abstraction_name} using LLM...")
+        print(f"  ✍️  Chapter {chapter_num}: {abstraction_name}")
 
         # Prepare file context
         file_context_str = "\n\n".join(
@@ -979,7 +979,6 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
         shared["chapters"] = exec_res_list
         # Clean up instance variable
         del self.chapters_written_so_far
-        print(f"Finished writing {len(exec_res_list)} chapters.")
 
 
 # =============================================================================
@@ -1099,21 +1098,21 @@ class CombineTutorial(Node):
         index_content = prep_res["index_content"]
         chapter_files = prep_res["chapter_files"]
 
-        print(f"Combining tutorial into directory: {output_path}")
+        print(f"\n📁 Writing files to: {output_path}")
         os.makedirs(output_path, exist_ok=True)
 
         # Write index.md
         index_filepath = os.path.join(output_path, "index.md")
         with open(index_filepath, "w", encoding="utf-8") as f:
             f.write(index_content)
-        print(f"  - Wrote {index_filepath}")
+        print(f"  ✓ index.md")
 
         # Write each chapter file
         for chapter_info in chapter_files:
             chapter_filepath = os.path.join(output_path, chapter_info["filename"])
             with open(chapter_filepath, "w", encoding="utf-8") as f:
                 f.write(chapter_info["content"])
-            print(f"  - Wrote {chapter_filepath}")
+            print(f"  ✓ {chapter_info['filename']}")
 
         return output_path
 

@@ -304,30 +304,30 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
     Raises:
         Various exceptions depending on the provider
     """
+    import time
+    start_time = time.time()
+    
     # Log the prompt for debugging
     logger.info(f"PROMPT: {prompt}")
-    
-    # Show prompt preview in console (first 200 chars)
-    prompt_preview = prompt[:200].replace('\n', ' ') + ('...' if len(prompt) > 200 else '')
-    print(f"  📝 Prompt ({len(prompt)} chars): {prompt_preview}")
 
     # Check cache if enabled - avoids redundant API calls
     if use_cache:
         cache = load_cache()
         if prompt in cache:
             logger.info("CACHE HIT: Using cached response")
-            print(f"  💾❤️ Cache HIT - using cached response")
+            print(f"  💾 Cache HIT")
             return cache[prompt]
 
     # Check if local LLM override is set (user chose to use detected local LLM)
     local_override = get_local_llm_override()
     if local_override:
-        print(f"  🦙 Calling Ollama ({local_override['name']}) at {local_override['url']}...")
+        model_name = local_override.get('model', 'unknown')
+        print(f"  🦙 {local_override['name']} ({model_name})...", end=" ", flush=True)
         response_text = _call_llm_local(prompt, local_override["url"])
     else:
         # Get the configured provider and route to appropriate function
         provider = get_llm_provider()
-        print(f"  ☁️  Calling {provider} API...")
+        print(f"  ☁️  {provider}...", end=" ", flush=True)
         
         # Route to the correct provider-specific function
         # IMPORTANT: This order must match the priority in get_llm_provider()!
@@ -340,19 +340,24 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
         else:  # GENERIC - OpenAI-compatible API
             response_text = _call_llm_generic(prompt)
 
+    # Calculate elapsed time
+    elapsed = time.time() - start_time
+    if elapsed >= 60:
+        time_str = f"{elapsed/60:.1f}m"
+    else:
+        time_str = f"{elapsed:.1f}s"
+    
     # Log the response for debugging
     logger.info(f"RESPONSE: {response_text}")
     
-    # Show response preview in console
-    response_preview = response_text[:150].replace('\n', ' ') + ('...' if len(response_text) > 150 else '')
-    print(f"  ✅ Response ({len(response_text)} chars): {response_preview}")
+    # Show concise completion message
+    print(f"✓ {len(response_text):,} chars ({time_str})")
 
     # Update cache if enabled
     if use_cache:
         cache = load_cache()
         cache[prompt] = response_text
         save_cache(cache)
-        print(f"  💾 Response cached")
 
     return response_text
 
@@ -574,12 +579,12 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     }
     
     try:
-        print(f"  🔄 Sending to {ollama_chat_url} with model '{model}' (context: {OLLAMA_CONTEXT_LENGTH} tokens)...")
         response = requests.post(ollama_chat_url, headers=headers, json=ollama_chat_payload, timeout=300)
         response.raise_for_status()
         return response.json()["message"]["content"]
     except requests.exceptions.RequestException as e:
-        print(f"  ⚠️  Ollama /api/chat failed: {e}")
+        # Silent fallback - don't print error, just try next endpoint
+        pass
     
     # Fall back to OpenAI-compatible endpoint (works with LM Studio, vLLM, etc.)
     openai_url = f"{base_url.rstrip('/')}/v1/chat/completions"
@@ -591,7 +596,6 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     }
     
     try:
-        print(f"  🔄 Trying OpenAI-compatible endpoint: {openai_url}...")
         response = requests.post(openai_url, headers=headers, json=payload, timeout=300)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]

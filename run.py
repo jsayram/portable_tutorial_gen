@@ -215,13 +215,24 @@ Examples:
     print(f"Output: {args.output}")
     print(f"=" * 60)
 
-    # Create and run the flow
+    # Create and run the flow with timing
+    import time
+    start_time = time.time()
+    
     tutorial_flow = create_tutorial_flow()
     tutorial_flow.run(shared)
 
+    # Calculate elapsed time
+    elapsed = time.time() - start_time
+    if elapsed >= 60:
+        time_str = f"{elapsed/60:.1f} minutes"
+    else:
+        time_str = f"{elapsed:.1f} seconds"
+
     print(f"\n{'=' * 60}")
-    print(f"Tutorial generated successfully!")
-    print(f"Output directory: {shared['final_output_dir']}")
+    print(f"✅ Tutorial generated successfully!")
+    print(f"   Output: {shared['final_output_dir']}")
+    print(f"   Time: {time_str}")
     print(f"{'=' * 60}")
 
 
