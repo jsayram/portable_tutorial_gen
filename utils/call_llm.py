@@ -78,6 +78,7 @@ from constants.llm import (
     LOCAL_LLM_ENDPOINTS,
     LOCAL_LLM_DETECTION_TIMEOUT,
     ENV_SKIP_LOCAL_LLM_DETECTION,
+    OLLAMA_CONTEXT_LENGTH,
 )
 from constants.paths import (
     LOGS_DIR_NAME,
@@ -561,15 +562,19 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     headers = {"Content-Type": "application/json"}
     
     # Try Ollama /api/chat endpoint first (current Ollama API)
+    # Include num_ctx to set context length for large codebases (128K tokens)
     ollama_chat_url = f"{base_url.rstrip('/')}/api/chat"
     ollama_chat_payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        "options": {
+            "num_ctx": OLLAMA_CONTEXT_LENGTH,  # 128K context for 64GB+ RAM machines
+        }
     }
     
     try:
-        print(f"  🔄 Sending to {ollama_chat_url} with model '{model}'...")
+        print(f"  🔄 Sending to {ollama_chat_url} with model '{model}' (context: {OLLAMA_CONTEXT_LENGTH} tokens)...")
         response = requests.post(ollama_chat_url, headers=headers, json=ollama_chat_payload, timeout=300)
         response.raise_for_status()
         return response.json()["message"]["content"]
