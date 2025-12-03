@@ -1010,6 +1010,16 @@ class CombineTutorial(Node):
         project_name = shared["project_name"]
         output_base_dir = shared.get("output_dir", "output")
         output_path = os.path.join(output_base_dir, project_name)
+        
+        # Auto-version the output directory (always use versioned names)
+        version = 1
+        while True:
+            versioned_path = f"{output_path}_v{version}"
+            if not os.path.exists(versioned_path):
+                output_path = versioned_path
+                break
+            version += 1
+        
         repo_url = shared.get("repo_url")
 
         relationships_data = shared["relationships"]
