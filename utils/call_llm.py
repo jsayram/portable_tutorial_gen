@@ -129,17 +129,18 @@ cache_file = os.path.join(_PACKAGE_DIR, CACHE_FILE_NAME)
 _local_llm_override = None  # Will be set to {"url": ..., "name": ...} if user chooses local
 
 
-def set_local_llm_override(url: str, name: str) -> None:
+def set_local_llm_override(url: str, name: str, model: str = None) -> None:
     """
     Set a local LLM to use instead of the configured provider.
     
     Args:
         url: The base URL of the local LLM (e.g., "http://localhost:11434")
         name: The name of the local LLM (e.g., "Ollama")
+        model: The model to use (e.g., "llama3.2"). If None, will use first available.
     """
     global _local_llm_override
-    _local_llm_override = {"url": url, "name": name}
-    logger.info(f"Local LLM override set: {name} at {url}")
+    _local_llm_override = {"url": url, "name": name, "model": model}
+    logger.info(f"Local LLM override set: {name} at {url} with model {model}")
 
 
 def clear_local_llm_override() -> None:
@@ -550,8 +551,12 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     Returns:
         str: The response text
     """
-    # Try to get model from environment or use a sensible default
-    model = os.getenv(ENV_LLM_MODEL, DEFAULT_GENERIC_MODEL)
+    # Get model from override, environment, or use default
+    local_override = get_local_llm_override()
+    if local_override and local_override.get("model"):
+        model = local_override["model"]
+    else:
+        model = os.getenv(ENV_LLM_MODEL, DEFAULT_GENERIC_MODEL)
     
     headers = {"Content-Type": "application/json"}
     

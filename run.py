@@ -79,8 +79,12 @@ def check_for_local_llm() -> dict | None:
             idx = int(choice) - 1
             if 0 <= idx < len(detected):
                 selected = detected[idx]
+                # Use first available model if any
+                model = selected["models"][0] if selected["models"] else None
                 print(f"✓ Using {selected['name']} at {selected['url']}")
-                return {"url": selected["url"], "name": selected["name"]}
+                if model:
+                    print(f"  Model: {model}")
+                return {"url": selected["url"], "name": selected["name"], "model": model}
             else:
                 print(f"Invalid choice. Enter 0-{len(detected)}")
         except ValueError:
@@ -163,7 +167,7 @@ Examples:
         local_llm = check_for_local_llm()
         if local_llm:
             from utils.call_llm import set_local_llm_override
-            set_local_llm_override(local_llm["url"], local_llm["name"])
+            set_local_llm_override(local_llm["url"], local_llm["name"], local_llm.get("model"))
 
     # Validate directory exists
     dir_path = Path(args.dir).resolve()
