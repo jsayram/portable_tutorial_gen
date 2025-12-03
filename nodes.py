@@ -329,6 +329,16 @@ Format the output as a YAML list of dictionaries:
         # VALIDATION: Parse and validate the LLM response
         # =======================================================================
         # Extract YAML from the response
+        if "```yaml" not in response:
+            # Show first 500 chars of response for debugging
+            preview = response[:500] + "..." if len(response) > 500 else response
+            raise ValueError(
+                f"LLM response does not contain ```yaml block. "
+                f"The model may not be following instructions properly.\n"
+                f"Response preview: {preview}\n\n"
+                f"TIP: Try a code-focused model like 'qwen2.5-coder:7b' or 'qwen2.5-coder:14b'"
+            )
+        
         yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
         abstractions = yaml.safe_load(yaml_str)
 
@@ -522,6 +532,15 @@ Now, provide the YAML output:
         # =======================================================================
         # VALIDATION
         # =======================================================================
+        if "```yaml" not in response:
+            preview = response[:500] + "..." if len(response) > 500 else response
+            raise ValueError(
+                f"LLM response does not contain ```yaml block. "
+                f"The model may not be following instructions properly.\n"
+                f"Response preview: {preview}\n\n"
+                f"TIP: Try a code-focused model like 'qwen2.5-coder:7b' or 'qwen2.5-coder:14b'"
+            )
+        
         yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
         relationships_data = yaml.safe_load(yaml_str)
 
@@ -681,6 +700,15 @@ Now, provide the YAML output:
         # =======================================================================
         # VALIDATION
         # =======================================================================
+        if "```yaml" not in response:
+            preview = response[:500] + "..." if len(response) > 500 else response
+            raise ValueError(
+                f"LLM response does not contain ```yaml block. "
+                f"The model may not be following instructions properly.\n"
+                f"Response preview: {preview}\n\n"
+                f"TIP: Try a code-focused model like 'qwen2.5-coder:7b' or 'qwen2.5-coder:14b'"
+            )
+        
         yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
         ordered_indices_raw = yaml.safe_load(yaml_str)
 
