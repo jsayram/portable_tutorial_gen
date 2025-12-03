@@ -418,7 +418,7 @@ class AnalyzeRelationships(Node):
         abstractions = shared["abstractions"]
         files_data = shared["files"]
         project_name = shared["project_name"]
-        language = shared.get("language", "english")
+        language = shared.get("language", DEFAULT_LANGUAGE)
         use_cache = shared.get("use_cache", True)
 
         num_abstractions = len(abstractions)
@@ -604,7 +604,7 @@ class OrderChapters(Node):
         abstractions = shared["abstractions"]
         relationships = shared["relationships"]
         project_name = shared["project_name"]
-        language = shared.get("language", "english")
+        language = shared.get("language", DEFAULT_LANGUAGE)
         use_cache = shared.get("use_cache", True)
 
         # Format abstraction listing
@@ -767,7 +767,7 @@ class WriteChapters(BatchNode):
         abstractions = shared["abstractions"]
         files_data = shared["files"]
         project_name = shared["project_name"]
-        language = shared.get("language", "english")
+        language = shared.get("language", DEFAULT_LANGUAGE)
         use_cache = shared.get("use_cache", True)
 
         # Instance variable to track chapters written so far (for context)
@@ -845,7 +845,7 @@ class WriteChapters(BatchNode):
         abstraction_description = item["abstraction_details"]["description"]
         chapter_num = item["chapter_num"]
         project_name = item.get("project_name")
-        language = item.get("language", "english")
+        language = item.get("language", DEFAULT_LANGUAGE)
         use_cache = item.get("use_cache", True)
         
         print(f"Writing chapter {chapter_num} for: {abstraction_name} using LLM...")
