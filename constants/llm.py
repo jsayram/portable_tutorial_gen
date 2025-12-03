@@ -66,6 +66,24 @@ DEFAULT_GENERIC_BASE_URL = "http://localhost:11434"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # =============================================================================
+# LOCAL LLM DETECTION
+# =============================================================================
+# Common local LLM servers and their default ports
+LOCAL_LLM_ENDPOINTS = [
+    {"name": "Ollama", "url": "http://localhost:11434", "health_path": "/api/tags"},
+    {"name": "LM Studio", "url": "http://localhost:1234", "health_path": "/v1/models"},
+    {"name": "LocalAI", "url": "http://localhost:8080", "health_path": "/v1/models"},
+    {"name": "Text Generation WebUI", "url": "http://localhost:5000", "health_path": "/v1/models"},
+    {"name": "vLLM", "url": "http://localhost:8000", "health_path": "/v1/models"},
+]
+
+# Timeout for local LLM detection (in seconds)
+LOCAL_LLM_DETECTION_TIMEOUT = 1.0
+
+# Environment variable to skip local LLM detection
+ENV_SKIP_LOCAL_LLM_DETECTION = "SKIP_LOCAL_LLM_DETECTION"
+
+# =============================================================================
 # LLM CONFIGURATION
 # =============================================================================
 DEFAULT_TEMPERATURE = 0.7  # Balanced creativity vs consistency

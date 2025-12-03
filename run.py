@@ -29,6 +29,65 @@ from constants.defaults import (
     DEFAULT_MAX_ABSTRACTIONS,
 )
 from constants.paths import DEFAULT_OUTPUT_DIR
+from constants.llm import ENV_SKIP_LOCAL_LLM_DETECTION
+
+
+def check_for_local_llm() -> dict | None:
+    """
+    Check for running local LLM servers and prompt user if they want to use one.
+    
+    Returns:
+        dict with 'url' and 'name' if user chooses a local LLM, None otherwise
+    """
+    # Skip if environment variable is set
+    if os.getenv(ENV_SKIP_LOCAL_LLM_DETECTION, "").lower() in ("1", "true", "yes"):
+        return None
+    
+    # Import detection function
+    from utils.call_llm import detect_local_llms
+    
+    print("Checking for local LLM servers...")
+    detected = detect_local_llms()
+    
+    if not detected:
+        print("No local LLM servers detected.")
+        return None
+    
+    # Display detected LLMs
+    print(f"\n{'=' * 60}")
+    print("🖥️  Local LLM Server(s) Detected!")
+    print(f"{'=' * 60}")
+    
+    for i, llm in enumerate(detected, 1):
+        models_str = ", ".join(llm["models"][:3]) if llm["models"] else "models available"
+        if len(llm["models"]) > 3:
+            models_str += f" (+{len(llm['models']) - 3} more)"
+        print(f"  [{i}] {llm['name']} at {llm['url']}")
+        print(f"      Models: {models_str}")
+    
+    print(f"  [0] Skip - Use configured cloud provider")
+    print(f"{'=' * 60}")
+    
+    # Prompt user
+    while True:
+        try:
+            choice = input("\nUse local LLM? Enter number (0 to skip): ").strip()
+            if choice == "" or choice == "0":
+                print("Using configured cloud provider.")
+                return None
+            
+            idx = int(choice) - 1
+            if 0 <= idx < len(detected):
+                selected = detected[idx]
+                print(f"✓ Using {selected['name']} at {selected['url']}")
+                return {"url": selected["url"], "name": selected["name"]}
+            else:
+                print(f"Invalid choice. Enter 0-{len(detected)}")
+        except ValueError:
+            print("Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nUsing configured cloud provider.")
+            return None
 
 
 def main():
@@ -90,8 +149,21 @@ Examples:
         default=DEFAULT_MAX_ABSTRACTIONS, 
         help=f"Maximum number of abstractions to identify (default: {DEFAULT_MAX_ABSTRACTIONS})."
     )
+    parser.add_argument(
+        "--skip-local-llm", 
+        action="store_true", 
+        help="Skip local LLM detection and use configured cloud provider."
+    )
 
     args = parser.parse_args()
+
+    # Check for local LLM servers (unless skipped)
+    local_llm = None
+    if not args.skip_local_llm:
+        local_llm = check_for_local_llm()
+        if local_llm:
+            from utils.call_llm import set_local_llm_override
+            set_local_llm_override(local_llm["url"], local_llm["name"])
 
     # Validate directory exists
     dir_path = Path(args.dir).resolve()
@@ -126,6 +198,16 @@ Examples:
     print(f"Directory: {dir_path}")
     print(f"Language: {args.language.capitalize()}")
     print(f"LLM Caching: {'Disabled' if args.no_cache else 'Enabled'}")
+    if local_llm:
+        print(f"LLM Provider: {local_llm['name']} (local) at {local_llm['url']}")
+    else:
+        from utils.call_llm import get_llm_provider
+        try:
+            provider = get_llm_provider()
+            print(f"LLM Provider: {provider}")
+        except ValueError as e:
+            print(f"LLM Provider: Not configured - {e}")
+            sys.exit(1)
     print(f"Output: {args.output}")
     print(f"=" * 60)
 

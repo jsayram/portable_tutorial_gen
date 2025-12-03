@@ -75,6 +75,9 @@ from constants.llm import (
     DEFAULT_TEMPERATURE,
     DEFAULT_OPENROUTER_REFERER,
     DEFAULT_OPENROUTER_TITLE,
+    LOCAL_LLM_ENDPOINTS,
+    LOCAL_LLM_DETECTION_TIMEOUT,
+    ENV_SKIP_LOCAL_LLM_DETECTION,
 )
 from constants.paths import (
     LOGS_DIR_NAME,
@@ -118,6 +121,83 @@ if not logger.handlers:
 # Cache file stores prompt -> response mappings as JSON
 # Located in the portable package directory (not current working directory)
 cache_file = os.path.join(_PACKAGE_DIR, CACHE_FILE_NAME)
+
+# =============================================================================
+# LOCAL LLM OVERRIDE STATE
+# =============================================================================
+# This allows run.py to override the provider with a detected local LLM
+_local_llm_override = None  # Will be set to {"url": ..., "name": ...} if user chooses local
+
+
+def set_local_llm_override(url: str, name: str) -> None:
+    """
+    Set a local LLM to use instead of the configured provider.
+    
+    Args:
+        url: The base URL of the local LLM (e.g., "http://localhost:11434")
+        name: The name of the local LLM (e.g., "Ollama")
+    """
+    global _local_llm_override
+    _local_llm_override = {"url": url, "name": name}
+    logger.info(f"Local LLM override set: {name} at {url}")
+
+
+def clear_local_llm_override() -> None:
+    """Clear the local LLM override, reverting to configured provider."""
+    global _local_llm_override
+    _local_llm_override = None
+
+
+def get_local_llm_override() -> dict | None:
+    """Get the current local LLM override, if any."""
+    return _local_llm_override
+
+
+def detect_local_llms() -> list[dict]:
+    """
+    Detect running local LLM servers.
+    
+    Checks common local LLM endpoints (Ollama, LM Studio, etc.) to see
+    which ones are responding. Uses a short timeout to avoid blocking.
+    
+    Returns:
+        list: List of detected LLMs with their name, url, and available models
+    """
+    detected = []
+    
+    for endpoint in LOCAL_LLM_ENDPOINTS:
+        try:
+            health_url = f"{endpoint['url']}{endpoint['health_path']}"
+            response = requests.get(
+                health_url, 
+                timeout=LOCAL_LLM_DETECTION_TIMEOUT
+            )
+            if response.status_code == 200:
+                # Try to get model list from response
+                models = []
+                try:
+                    data = response.json()
+                    # Ollama format
+                    if "models" in data:
+                        models = [m.get("name", m.get("model", "unknown")) for m in data["models"]]
+                    # OpenAI-compatible format
+                    elif "data" in data:
+                        models = [m.get("id", "unknown") for m in data["data"]]
+                except:
+                    pass
+                
+                detected.append({
+                    "name": endpoint["name"],
+                    "url": endpoint["url"],
+                    "models": models[:5]  # Limit to first 5 models for display
+                })
+        except requests.exceptions.RequestException:
+            # Server not responding, skip it
+            pass
+        except Exception as e:
+            logger.debug(f"Error checking {endpoint['name']}: {e}")
+    
+    return detected
 
 
 def load_cache() -> dict:
@@ -232,19 +312,24 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
             logger.info("CACHE HIT: Using cached response")
             return cache[prompt]
 
-    # Get the configured provider and route to appropriate function
-    provider = get_llm_provider()
-    
-    # Route to the correct provider-specific function
-    # IMPORTANT: This order must match the priority in get_llm_provider()!
-    if provider == LLM_PROVIDER_OPENAI:
-        response_text = _call_llm_openai(prompt)
-    elif provider == LLM_PROVIDER_GEMINI:
-        response_text = _call_llm_gemini(prompt)
-    elif provider == LLM_PROVIDER_OPENROUTER:
-        response_text = _call_llm_openrouter(prompt)
-    else:  # GENERIC - OpenAI-compatible API
-        response_text = _call_llm_generic(prompt)
+    # Check if local LLM override is set (user chose to use detected local LLM)
+    local_override = get_local_llm_override()
+    if local_override:
+        response_text = _call_llm_local(prompt, local_override["url"])
+    else:
+        # Get the configured provider and route to appropriate function
+        provider = get_llm_provider()
+        
+        # Route to the correct provider-specific function
+        # IMPORTANT: This order must match the priority in get_llm_provider()!
+        if provider == LLM_PROVIDER_OPENAI:
+            response_text = _call_llm_openai(prompt)
+        elif provider == LLM_PROVIDER_GEMINI:
+            response_text = _call_llm_gemini(prompt)
+        elif provider == LLM_PROVIDER_OPENROUTER:
+            response_text = _call_llm_openrouter(prompt)
+        else:  # GENERIC - OpenAI-compatible API
+            response_text = _call_llm_generic(prompt)
 
     # Log the response for debugging
     logger.info(f"RESPONSE: {response_text}")
@@ -437,6 +522,58 @@ def _call_llm_generic(prompt: str) -> str:
         return response.json()["choices"][0]["message"]["content"]
     except requests.exceptions.RequestException as e:
         raise Exception(f"Error calling LLM API at {url}: {e}")
+
+
+def _call_llm_local(prompt: str, base_url: str) -> str:
+    """
+    Call a local LLM that was detected and chosen by the user.
+    
+    This is used when the user selects a detected local LLM (Ollama, LM Studio, etc.)
+    at startup. Uses OpenAI-compatible API format which most local LLMs support.
+    
+    Args:
+        prompt: The prompt to send
+        base_url: The base URL of the local LLM server
+        
+    Returns:
+        str: The response text
+    """
+    # Try to get model from environment or use a sensible default
+    model = os.getenv(ENV_LLM_MODEL, DEFAULT_GENERIC_MODEL)
+    
+    # First try the OpenAI-compatible endpoint (works with LM Studio, vLLM, etc.)
+    openai_url = f"{base_url.rstrip('/')}/v1/chat/completions"
+    
+    headers = {"Content-Type": "application/json"}
+    
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": DEFAULT_TEMPERATURE,
+    }
+    
+    try:
+        response = requests.post(openai_url, headers=headers, json=payload, timeout=120)
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException:
+        # Fall back to Ollama-specific endpoint
+        pass
+    
+    # Try Ollama-specific endpoint
+    ollama_url = f"{base_url.rstrip('/')}/api/generate"
+    ollama_payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+    }
+    
+    try:
+        response = requests.post(ollama_url, headers=headers, json=ollama_payload, timeout=120)
+        response.raise_for_status()
+        return response.json().get("response", "")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Error calling local LLM at {base_url}: {e}")
 
 
 # =============================================================================
