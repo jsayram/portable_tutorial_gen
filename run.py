@@ -21,35 +21,14 @@ except ImportError:
     print("Warning: python-dotenv not installed. Environment variables must be set manually.")
 
 from flow import create_tutorial_flow
-
-# Default file patterns
-DEFAULT_INCLUDE_PATTERNS = {
-    "*.py", "*.js", "*.jsx", "*.ts", "*.tsx", "*.go", "*.java", "*.pyi", "*.pyx",
-    "*.c", "*.cs", "*.cc", "*.cpp", "*.h", "*.md", "*.rst", "Dockerfile",
-    "Makefile", "*.yaml", "*.yml",
-}
-
-DEFAULT_EXCLUDE_PATTERNS = {
-    "assets/*", "data/*", "images/*", "public/*", "static/*", "temp/*",
-    "*docs/*",
-    "*venv/*",
-    "*.venv/*",
-    "*test*",
-    "*tests/*",
-    "*examples/*",
-    "v1/*",
-    "*dist/*",
-    "*build/*",
-    "*experimental/*",
-    "*deprecated/*",
-    "*misc/*",
-    "*legacy/*",
-    ".git/*", ".github/*", ".next/*", ".vscode/*",
-    "*obj/*",
-    "*bin/*",
-    "*node_modules/*",
-    "*.log"
-}
+from constants.defaults import (
+    DEFAULT_INCLUDE_PATTERNS,
+    DEFAULT_EXCLUDE_PATTERNS,
+    DEFAULT_MAX_FILE_SIZE,
+    DEFAULT_LANGUAGE,
+    DEFAULT_MAX_ABSTRACTIONS,
+)
+from constants.paths import DEFAULT_OUTPUT_DIR
 
 
 def main():
@@ -76,8 +55,8 @@ Examples:
     )
     parser.add_argument(
         "-o", "--output", 
-        default="output", 
-        help="Output directory for the tutorial (default: ./output)."
+        default=DEFAULT_OUTPUT_DIR, 
+        help=f"Output directory for the tutorial (default: ./{DEFAULT_OUTPUT_DIR})."
     )
     parser.add_argument(
         "-i", "--include", 
@@ -92,13 +71,13 @@ Examples:
     parser.add_argument(
         "-s", "--max-size", 
         type=int, 
-        default=100000, 
-        help="Maximum file size in bytes (default: 100000, about 100KB)."
+        default=DEFAULT_MAX_FILE_SIZE, 
+        help=f"Maximum file size in bytes (default: {DEFAULT_MAX_FILE_SIZE}, about 100KB)."
     )
     parser.add_argument(
         "--language", 
-        default="english", 
-        help="Language for the generated tutorial (default: english)."
+        default=DEFAULT_LANGUAGE, 
+        help=f"Language for the generated tutorial (default: {DEFAULT_LANGUAGE})."
     )
     parser.add_argument(
         "--no-cache", 
@@ -108,8 +87,8 @@ Examples:
     parser.add_argument(
         "--max-abstractions", 
         type=int, 
-        default=10, 
-        help="Maximum number of abstractions to identify (default: 10)."
+        default=DEFAULT_MAX_ABSTRACTIONS, 
+        help=f"Maximum number of abstractions to identify (default: {DEFAULT_MAX_ABSTRACTIONS})."
     )
 
     args = parser.parse_args()

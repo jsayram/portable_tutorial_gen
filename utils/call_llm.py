@@ -45,6 +45,44 @@ try:
 except ImportError:
     pass  # dotenv is optional - env vars can be set manually
 
+# Import constants from the constants module
+from constants.llm import (
+    LLM_PROVIDER_OPENAI,
+    LLM_PROVIDER_GEMINI,
+    LLM_PROVIDER_OPENROUTER,
+    LLM_PROVIDER_GENERIC,
+    ENV_OPENAI_API_KEY,
+    ENV_OPENAI_MODEL,
+    ENV_GEMINI_API_KEY,
+    ENV_GEMINI_PROJECT_ID,
+    ENV_GEMINI_LOCATION,
+    ENV_GEMINI_MODEL,
+    ENV_OPENROUTER_API_KEY,
+    ENV_OPENROUTER_MODEL,
+    ENV_OPENROUTER_REFERER,
+    ENV_OPENROUTER_TITLE,
+    ENV_LLM_API_BASE_URL,
+    ENV_LLM_API_KEY,
+    ENV_LLM_MODEL,
+    ENV_LOG_DIR,
+    DEFAULT_OPENAI_MODEL,
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_GEMINI_LOCATION,
+    DEFAULT_OPENROUTER_MODEL,
+    DEFAULT_GENERIC_MODEL,
+    DEFAULT_GENERIC_BASE_URL,
+    OPENROUTER_API_URL,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_OPENROUTER_REFERER,
+    DEFAULT_OPENROUTER_TITLE,
+)
+from constants.paths import (
+    LOGS_DIR_NAME,
+    CACHE_FILE_NAME,
+    LOG_FILE_PREFIX,
+    LOG_DATE_FORMAT,
+)
+
 # =============================================================================
 # LOGGING CONFIGURATION
 # =============================================================================
@@ -53,12 +91,12 @@ except ImportError:
 _PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Create logs directory relative to package root
-log_directory = os.getenv("LOG_DIR", os.path.join(_PACKAGE_DIR, "logs"))
+log_directory = os.getenv(ENV_LOG_DIR, os.path.join(_PACKAGE_DIR, LOGS_DIR_NAME))
 os.makedirs(log_directory, exist_ok=True)
 
 # Create log file with today's date
 log_file = os.path.join(
-    log_directory, f"llm_calls_{datetime.now().strftime('%Y%m%d')}.log"
+    log_directory, f"{LOG_FILE_PREFIX}{datetime.now().strftime(LOG_DATE_FORMAT)}.log"
 )
 
 # Set up logger - we use a named logger to avoid conflicts
@@ -79,7 +117,7 @@ if not logger.handlers:
 # =============================================================================
 # Cache file stores prompt -> response mappings as JSON
 # Located in the portable package directory (not current working directory)
-cache_file = os.path.join(_PACKAGE_DIR, "llm_cache.json")
+cache_file = os.path.join(_PACKAGE_DIR, CACHE_FILE_NAME)
 
 
 def load_cache() -> dict:
@@ -139,22 +177,22 @@ def get_llm_provider() -> str:
         ValueError: If no provider is configured
     """
     # Check OpenAI first (most common choice)
-    if os.getenv("OPENAI_API_KEY"):
-        return "OPENAI"
+    if os.getenv(ENV_OPENAI_API_KEY):
+        return LLM_PROVIDER_OPENAI
     # Check Gemini next (API key or Vertex AI project)
-    elif os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_PROJECT_ID"):
-        return "GEMINI"
+    elif os.getenv(ENV_GEMINI_API_KEY) or os.getenv(ENV_GEMINI_PROJECT_ID):
+        return LLM_PROVIDER_GEMINI
     # Check OpenRouter (multi-model gateway)
-    elif os.getenv("OPENROUTER_API_KEY"):
-        return "OPENROUTER"
+    elif os.getenv(ENV_OPENROUTER_API_KEY):
+        return LLM_PROVIDER_OPENROUTER
     # Check for generic OpenAI-compatible API (Ollama, etc.)
-    elif os.getenv("LLM_API_BASE_URL"):
-        return "GENERIC"
+    elif os.getenv(ENV_LLM_API_BASE_URL):
+        return LLM_PROVIDER_GENERIC
     else:
         raise ValueError(
-            "No LLM provider configured. Set one of: "
-            "OPENAI_API_KEY, GEMINI_API_KEY, GEMINI_PROJECT_ID, "
-            "OPENROUTER_API_KEY, or LLM_API_BASE_URL"
+            f"No LLM provider configured. Set one of: "
+            f"{ENV_OPENAI_API_KEY}, {ENV_GEMINI_API_KEY}, {ENV_GEMINI_PROJECT_ID}, "
+            f"{ENV_OPENROUTER_API_KEY}, or {ENV_LLM_API_BASE_URL}"
         )
 
 
@@ -199,11 +237,11 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
     
     # Route to the correct provider-specific function
     # IMPORTANT: This order must match the priority in get_llm_provider()!
-    if provider == "OPENAI":
+    if provider == LLM_PROVIDER_OPENAI:
         response_text = _call_llm_openai(prompt)
-    elif provider == "GEMINI":
+    elif provider == LLM_PROVIDER_GEMINI:
         response_text = _call_llm_gemini(prompt)
-    elif provider == "OPENROUTER":
+    elif provider == LLM_PROVIDER_OPENROUTER:
         response_text = _call_llm_openrouter(prompt)
     else:  # GENERIC - OpenAI-compatible API
         response_text = _call_llm_generic(prompt)
@@ -243,19 +281,19 @@ def _call_llm_openai(prompt: str) -> str:
     except ImportError:
         raise ImportError("OpenAI package not installed. Run: pip install openai")
     
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv(ENV_OPENAI_API_KEY)
     if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable not set")
+        raise ValueError(f"{ENV_OPENAI_API_KEY} environment variable not set")
     
     # Use environment variable for model, with sensible default
-    model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+    model = os.getenv(ENV_OPENAI_MODEL, DEFAULT_OPENAI_MODEL)
     
     # Create client and make the API call
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7  # Balanced creativity vs consistency
+        temperature=DEFAULT_TEMPERATURE  # Balanced creativity vs consistency
     )
     
     return response.choices[0].message.content
@@ -290,19 +328,19 @@ def _call_llm_gemini(prompt: str) -> str:
     
     # IMPORTANT: Check API key FIRST (simpler, no ADC required)
     # This avoids the "DefaultCredentialsError" when using API key
-    if os.getenv("GEMINI_API_KEY"):
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-    elif os.getenv("GEMINI_PROJECT_ID"):
+    if os.getenv(ENV_GEMINI_API_KEY):
+        client = genai.Client(api_key=os.getenv(ENV_GEMINI_API_KEY))
+    elif os.getenv(ENV_GEMINI_PROJECT_ID):
         # Vertex AI mode - requires Application Default Credentials
         client = genai.Client(
             vertexai=True,
-            project=os.getenv("GEMINI_PROJECT_ID"),
-            location=os.getenv("GEMINI_LOCATION", "us-central1")
+            project=os.getenv(ENV_GEMINI_PROJECT_ID),
+            location=os.getenv(ENV_GEMINI_LOCATION, DEFAULT_GEMINI_LOCATION)
         )
     else:
-        raise ValueError("Either GEMINI_API_KEY or GEMINI_PROJECT_ID must be set")
+        raise ValueError(f"Either {ENV_GEMINI_API_KEY} or {ENV_GEMINI_PROJECT_ID} must be set")
     
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
+    model = os.getenv(ENV_GEMINI_MODEL, DEFAULT_GEMINI_MODEL)
     response = client.models.generate_content(
         model=model,
         contents=[prompt]
@@ -329,25 +367,25 @@ def _call_llm_openrouter(prompt: str) -> str:
     Returns:
         str: The response text
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv(ENV_OPENROUTER_API_KEY)
     if not api_key:
-        raise ValueError("OPENROUTER_API_KEY environment variable not set")
+        raise ValueError(f"{ENV_OPENROUTER_API_KEY} environment variable not set")
     
-    model = os.getenv("OPENROUTER_MODEL", "openai/gpt-3.5-turbo")
-    base_url = "https://openrouter.ai/api/v1/chat/completions"
+    model = os.getenv(ENV_OPENROUTER_MODEL, DEFAULT_OPENROUTER_MODEL)
+    base_url = OPENROUTER_API_URL
     
     # OpenRouter requires specific headers for tracking
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "https://github.com"),
-        "X-Title": os.getenv("OPENROUTER_TITLE", "PocketFlow Tutorial Generator")
+        "HTTP-Referer": os.getenv(ENV_OPENROUTER_REFERER, DEFAULT_OPENROUTER_REFERER),
+        "X-Title": os.getenv(ENV_OPENROUTER_TITLE, DEFAULT_OPENROUTER_TITLE)
     }
     
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
+        "temperature": DEFAULT_TEMPERATURE,
     }
     
     response = requests.post(base_url, headers=headers, json=payload)
@@ -376,9 +414,9 @@ def _call_llm_generic(prompt: str) -> str:
     Returns:
         str: The response text
     """
-    base_url = os.getenv("LLM_API_BASE_URL", "http://localhost:11434")
-    api_key = os.getenv("LLM_API_KEY", "")  # Optional for local models
-    model = os.getenv("LLM_MODEL", "llama2")
+    base_url = os.getenv(ENV_LLM_API_BASE_URL, DEFAULT_GENERIC_BASE_URL)
+    api_key = os.getenv(ENV_LLM_API_KEY, "")  # Optional for local models
+    model = os.getenv(ENV_LLM_MODEL, DEFAULT_GENERIC_MODEL)
     
     # OpenAI-compatible endpoint
     url = f"{base_url.rstrip('/')}/v1/chat/completions"
@@ -390,7 +428,7 @@ def _call_llm_generic(prompt: str) -> str:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
+        "temperature": DEFAULT_TEMPERATURE,
     }
     
     try:

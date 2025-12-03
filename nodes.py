@@ -56,6 +56,12 @@ from utils.crawl_github_files import crawl_github_files  # For GitHub repos
 from utils.call_llm import call_llm                       # LLM wrapper - THE BRAIN
 from utils.crawl_local_files import crawl_local_files     # For local directories
 
+# Import constants
+from constants.defaults import (
+    DEFAULT_LANGUAGE,
+    DEFAULT_MAX_ABSTRACTIONS,
+)
+
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -216,9 +222,9 @@ class IdentifyAbstractions(Node):
         """
         files_data = shared["files"]
         project_name = shared["project_name"]
-        language = shared.get("language", "english")
+        language = shared.get("language", DEFAULT_LANGUAGE)
         use_cache = shared.get("use_cache", True)
-        max_abstraction_num = shared.get("max_abstraction_num", 10)
+        max_abstraction_num = shared.get("max_abstraction_num", DEFAULT_MAX_ABSTRACTIONS)
 
         # Helper to create context from files
         def create_llm_context(files_data):
