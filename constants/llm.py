@@ -22,6 +22,7 @@ LLM_PROVIDER_OPENAI = "OPENAI"
 LLM_PROVIDER_GEMINI = "GEMINI"
 LLM_PROVIDER_OPENROUTER = "OPENROUTER"
 LLM_PROVIDER_GENERIC = "GENERIC"
+LLM_PROVIDER_OLLAMA = "OLLAMA"
 
 # =============================================================================
 # ENVIRONMENT VARIABLE NAMES
@@ -53,11 +54,11 @@ ENV_LOG_DIR = "LOG_DIR"
 # =============================================================================
 # DEFAULT MODEL VALUES
 # =============================================================================
-DEFAULT_OPENAI_MODEL = "gpt-3.5-turbo"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-pro-exp-03-25"
+DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 DEFAULT_GEMINI_LOCATION = "us-central1"
-DEFAULT_OPENROUTER_MODEL = "openai/gpt-3.5-turbo"
-DEFAULT_GENERIC_MODEL = "llama2"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o"
+DEFAULT_GENERIC_MODEL = "llama3.2"
 DEFAULT_GENERIC_BASE_URL = "http://localhost:11434"
 
 # =============================================================================
@@ -83,10 +84,179 @@ LOCAL_LLM_DETECTION_TIMEOUT = 1.0
 # Environment variable to skip local LLM detection
 ENV_SKIP_LOCAL_LLM_DETECTION = "SKIP_LOCAL_LLM_DETECTION"
 
-# Ollama context length - 32K tokens is a safe default for most machines
-# Increase to 65536 (64K) or 131072 (128K) if you have 64GB+ RAM
-# Note: Higher context = more RAM usage (~1GB per 8K tokens for KV cache)
-OLLAMA_CONTEXT_LENGTH = 32768  # 32K tokens - good balance of context vs memory
+# =============================================================================
+# OLLAMA RECOMMENDED MODELS
+# =============================================================================
+# Models optimized for code analysis with large context windows
+# Ordered by capability (best first)
+
+OLLAMA_MODELS_HIGH_RAM = [
+    # For 64GB+ RAM (Mac M1 Max, high-end workstations)
+    {
+        "name": "qwen2.5-coder:32b",
+        "size_gb": 18,
+        "context": 131072,
+        "ram_required": 30,
+        "description": "Best code model - 32B params, 128K context",
+    },
+    {
+        "name": "qwen2.5-coder:14b",
+        "size_gb": 9,
+        "context": 131072,
+        "ram_required": 20,
+        "description": "Excellent code model - 14B params, 128K context",
+    },
+    {
+        "name": "deepseek-coder-v2:16b",
+        "size_gb": 9,
+        "context": 131072,
+        "ram_required": 20,
+        "description": "Great for code analysis - 16B params",
+    },
+]
+
+OLLAMA_MODELS_MEDIUM_RAM = [
+    # For 32GB RAM (Windows PCs, mid-range Macs)
+    {
+        "name": "qwen2.5-coder:7b",
+        "size_gb": 4.7,
+        "context": 131072,
+        "ram_required": 12,
+        "description": "Best for 32GB RAM - 7B params, 128K context",
+    },
+    {
+        "name": "deepseek-coder:6.7b",
+        "size_gb": 3.8,
+        "context": 65536,
+        "ram_required": 10,
+        "description": "Lightweight code model - 6.7B params",
+    },
+    {
+        "name": "codellama:7b",
+        "size_gb": 3.8,
+        "context": 100000,
+        "ram_required": 10,
+        "description": "Meta's code model - 7B params",
+    },
+]
+
+OLLAMA_MODELS_LOW_RAM = [
+    # For 16GB RAM
+    {
+        "name": "qwen2.5-coder:3b",
+        "size_gb": 1.9,
+        "context": 32768,
+        "ram_required": 8,
+        "description": "Small code model - 3B params, 32K context",
+    },
+    {
+        "name": "llama3.2:latest",
+        "size_gb": 2.0,
+        "context": 131072,
+        "ram_required": 6,
+        "description": "General purpose - 3B params",
+    },
+    {
+        "name": "phi3:mini",
+        "size_gb": 2.2,
+        "context": 131072,
+        "ram_required": 6,
+        "description": "Microsoft mini model - 3.8B params",
+    },
+]
+
+OLLAMA_MODELS_SMALL_RAM = [
+    # For 8GB RAM (budget laptops, older machines)
+    {
+        "name": "qwen2.5-coder:1.5b",
+        "size_gb": 1.0,
+        "context": 32768,
+        "ram_required": 4,
+        "description": "Tiny code model - 1.5B params",
+    },
+    {
+        "name": "qwen2.5-coder:0.5b",
+        "size_gb": 0.4,
+        "context": 32768,
+        "ram_required": 2,
+        "description": "Ultra-tiny code model - 0.5B params",
+    },
+    {
+        "name": "codegemma:2b",
+        "size_gb": 1.4,
+        "context": 8192,
+        "ram_required": 4,
+        "description": "Google's tiny code model - 2B params",
+    },
+]
+
+OLLAMA_MODELS_XSMALL_RAM = [
+    # For 4GB RAM or less (Raspberry Pi, very old machines)
+    {
+        "name": "tinyllama:latest",
+        "size_gb": 0.6,
+        "context": 2048,
+        "ram_required": 2,
+        "description": "Tiniest model - 1.1B params, limited context",
+    },
+    {
+        "name": "phi:latest",
+        "size_gb": 1.6,
+        "context": 2048,
+        "ram_required": 3,
+        "description": "Microsoft Phi-1 - 1.3B params",
+    },
+    {
+        "name": "stablelm2:1.6b",
+        "size_gb": 1.0,
+        "context": 4096,
+        "ram_required": 3,
+        "description": "Stability AI - 1.6B params",
+    },
+]
+
+# All recommended models combined
+OLLAMA_RECOMMENDED_MODELS = (
+    OLLAMA_MODELS_HIGH_RAM + 
+    OLLAMA_MODELS_MEDIUM_RAM + 
+    OLLAMA_MODELS_LOW_RAM +
+    OLLAMA_MODELS_SMALL_RAM +
+    OLLAMA_MODELS_XSMALL_RAM
+)
+
+# =============================================================================
+# OLLAMA CONTEXT CONFIGURATION
+# =============================================================================
+# Context length based on available system RAM
+# Higher context = more RAM for KV cache (~1GB per 8K tokens)
+
+OLLAMA_CONTEXT_BY_RAM = {
+    2: 2048,       # 2GB RAM   → 2K context (Raspberry Pi, minimal)
+    4: 4096,       # 4GB RAM   → 4K context (very old machines)
+    8: 8192,       # 8GB RAM   → 8K context (budget laptops)
+    16: 16384,     # 16GB RAM  → 16K context
+    32: 32768,     # 32GB RAM  → 32K context (Windows PC)
+    64: 65536,     # 64GB RAM  → 64K context (your Mac M1 Max)
+    128: 131072,   # 128GB RAM → 128K context (full)
+}
+
+# Default context length for unknown RAM configurations
+# 64K is optimal for 64GB RAM machines
+OLLAMA_CONTEXT_LENGTH = 65536  # 64K tokens
+
+# =============================================================================
+# SYSTEM REQUIREMENTS
+# =============================================================================
+# Minimum requirements for processing large codebases (500+ files)
+
+REQUIREMENTS_LARGE_CODEBASE = {
+    "min_ram_gb": 32,
+    "recommended_ram_gb": 64,
+    "min_context_tokens": 32768,
+    "recommended_context_tokens": 65536,
+    "recommended_model_high_ram": "qwen2.5-coder:32b",  # For 64GB+
+    "recommended_model_medium_ram": "qwen2.5-coder:7b",  # For 32GB
+}
 
 # =============================================================================
 # LLM CONFIGURATION

@@ -122,6 +122,71 @@ The tool checks for API keys in this order:
 3. `OPENROUTER_API_KEY` → OpenRouter
 4. `LLM_API_BASE_URL` → Generic (Ollama, local models)
 
+## Local LLM Support (Ollama)
+
+This tool supports **offline operation** using [Ollama](https://ollama.com). When you run the generator, it automatically detects if Ollama (or other local LLM servers) is running and prompts you to use it.
+
+### Install Ollama
+
+**macOS:**
+```bash
+brew install ollama
+```
+
+**Windows/Linux:**
+Download from [ollama.com/download](https://ollama.com/download)
+
+### Recommended Models by RAM
+
+| RAM | Best Model | Size | Context | Command |
+|-----|------------|------|---------|---------|
+| **64GB+** | `qwen2.5-coder:32b` | 18GB | 128K | `ollama pull qwen2.5-coder:32b` |
+| **32GB** | `qwen2.5-coder:7b` | 4.7GB | 128K | `ollama pull qwen2.5-coder:7b` |
+| **16GB** | `qwen2.5-coder:3b` | 1.9GB | 32K | `ollama pull qwen2.5-coder:3b` |
+| **8GB** | `qwen2.5-coder:1.5b` | 1.0GB | 32K | `ollama pull qwen2.5-coder:1.5b` |
+| **4GB** | `tinyllama:latest` | 0.6GB | 2K | `ollama pull tinyllama:latest` |
+
+### Model Recommendations by Use Case
+
+| Use Case | Recommended Model | Notes |
+|----------|-------------------|-------|
+| **Large codebases (500+ files)** | `qwen2.5-coder:32b` or `qwen2.5-coder:14b` | Needs 64GB+ RAM |
+| **Medium projects** | `qwen2.5-coder:7b` | Best balance of quality/speed |
+| **Quick testing** | `llama3.2:latest` | General purpose, fast |
+| **Code-focused analysis** | `qwen2.5-coder:*` | Trained on 5.5T code tokens |
+| **Budget hardware** | `qwen2.5-coder:1.5b` | Works on 8GB RAM |
+
+### Running with Ollama
+
+1. Start Ollama (runs in background):
+   ```bash
+   ollama serve
+   ```
+
+2. Pull a model:
+   ```bash
+   ollama pull qwen2.5-coder:7b
+   ```
+
+3. Run the generator - it will auto-detect Ollama:
+   ```bash
+   python run.py --dir /path/to/code
+   ```
+
+4. When prompted, select the local LLM option.
+
+### Skip Local LLM Detection
+
+To skip the local LLM prompt and use cloud providers directly:
+```bash
+python run.py --dir /path/to/code --skip-local-llm
+```
+
+Or set the environment variable:
+```bash
+export SKIP_LOCAL_LLM_DETECTION=1
+```
+
 ## Troubleshooting
 
 ### "No LLM provider configured"
