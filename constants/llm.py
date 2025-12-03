@@ -83,10 +83,10 @@ LOCAL_LLM_DETECTION_TIMEOUT = 1.0
 # Environment variable to skip local LLM detection
 ENV_SKIP_LOCAL_LLM_DETECTION = "SKIP_LOCAL_LLM_DETECTION"
 
-# Ollama context length - 128K tokens for machines with 64GB+ RAM
-# llama3.2 supports up to 128K context natively
-# This allows processing large codebases without truncation
-OLLAMA_CONTEXT_LENGTH = 131072  # 128K tokens
+# Ollama context length - 32K tokens is a safe default for most machines
+# Increase to 65536 (64K) or 131072 (128K) if you have 64GB+ RAM
+# Note: Higher context = more RAM usage (~1GB per 8K tokens for KV cache)
+OLLAMA_CONTEXT_LENGTH = 32768  # 32K tokens - good balance of context vs memory
 
 # =============================================================================
 # LLM CONFIGURATION
