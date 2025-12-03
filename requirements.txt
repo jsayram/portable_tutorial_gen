@@ -1,0 +1,11 @@
+# Core dependencies
+pocketflow>=0.0.1
+python-dotenv>=1.0.0
+requests>=2.28.0
+pathspec>=0.11.0
+pyyaml>=6.0
+gitpython>=3.1.0
+
+# LLM Providers (install what you need)
+openai>=1.0.0
+google-genai>=0.3.0

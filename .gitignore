@@ -1,0 +1,38 @@
+# ===========================================
+# Portable Tutorial Generator - Git Ignore
+# ===========================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Environment files (contain API keys!)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Generated files
+logs/
+llm_cache.json
+output/
+
+# Build
+dist/
+build/
