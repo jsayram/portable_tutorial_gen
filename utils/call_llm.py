@@ -36,6 +36,7 @@ import logging
 import json
 import requests
 import sys
+import hashlib
 from datetime import datetime
 
 # Try to load dotenv for .env file support
@@ -202,11 +203,29 @@ def detect_local_llms() -> list[dict]:
     return detected
 
 
+def _hash_prompt(prompt: str) -> str:
+    """
+    Create a SHA256 hash of the prompt for cache key.
+    
+    Using a hash instead of the full prompt:
+    - Makes cache lookups faster (comparing 64 char hashes vs megabytes of text)
+    - Keeps the cache file much smaller
+    - Avoids JSON escaping issues with complex prompts
+    
+    Args:
+        prompt: The full prompt text
+        
+    Returns:
+        str: 64-character hexadecimal SHA256 hash
+    """
+    return hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+
+
 def load_cache() -> dict:
     """
     Load the LLM response cache from disk.
     
-    The cache is a simple JSON file mapping prompts to their responses.
+    The cache maps prompt hashes to their responses.
     This avoids redundant API calls for the same prompts.
     
     Returns:
@@ -313,10 +332,11 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
     # Check cache if enabled - avoids redundant API calls
     if use_cache:
         cache = load_cache()
-        if prompt in cache:
+        prompt_hash = _hash_prompt(prompt)
+        if prompt_hash in cache:
             logger.info("CACHE HIT: Using cached response")
             print(f"  💾 Cache HIT")
-            return cache[prompt]
+            return cache[prompt_hash]
 
     # Check if local LLM override is set (user chose to use detected local LLM)
     local_override = get_local_llm_override()
@@ -356,7 +376,8 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
     # Update cache if enabled
     if use_cache:
         cache = load_cache()
-        cache[prompt] = response_text
+        prompt_hash = _hash_prompt(prompt)
+        cache[prompt_hash] = response_text
         save_cache(cache)
 
     return response_text
