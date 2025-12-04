@@ -131,6 +131,77 @@ cache_file = os.path.join(_PACKAGE_DIR, CACHE_FILE_NAME)
 _local_llm_override = None  # Will be set to {"url": ..., "name": ...} if user chooses local
 
 
+def is_ollama_running(url: str = "http://localhost:11434") -> bool:
+    """
+    Check if Ollama server is running and responsive.
+    
+    Args:
+        url: The base URL of the Ollama server
+        
+    Returns:
+        bool: True if Ollama is responding, False otherwise
+    """
+    try:
+        response = requests.get(f"{url}/api/tags", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
+
+
+def start_ollama() -> bool:
+    """
+    Attempt to start Ollama server.
+    
+    Returns:
+        bool: True if Ollama started successfully, False otherwise
+    """
+    import subprocess
+    import time
+    
+    print("\n⚠️  Ollama is not running. Attempting to start...")
+    
+    try:
+        # Start ollama serve in background
+        subprocess.Popen(
+            ["ollama", "serve"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+        
+        # Wait for it to start (up to 10 seconds)
+        for i in range(10):
+            time.sleep(1)
+            if is_ollama_running():
+                print("✅ Ollama started successfully!")
+                return True
+            print(f"   Waiting for Ollama to start... ({i+1}s)")
+        
+        print("❌ Failed to start Ollama after 10 seconds")
+        return False
+    except FileNotFoundError:
+        print("❌ Ollama is not installed. Please install it from https://ollama.ai")
+        return False
+    except Exception as e:
+        print(f"❌ Error starting Ollama: {e}")
+        return False
+
+
+def ensure_ollama_running(url: str = "http://localhost:11434") -> bool:
+    """
+    Ensure Ollama is running, attempting to start it if not.
+    
+    Args:
+        url: The base URL of the Ollama server
+        
+    Returns:
+        bool: True if Ollama is running (or was started), False otherwise
+    """
+    if is_ollama_running(url):
+        return True
+    return start_ollama()
+
+
 def set_local_llm_override(url: str, name: str, model: str = None) -> None:
     """
     Set a local LLM to use instead of the configured provider.
@@ -571,6 +642,9 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     This is used when the user selects a detected local LLM (Ollama, LM Studio, etc.)
     at startup. Uses OpenAI-compatible API format which most local LLMs support.
     
+    Includes auto-recovery: if the connection fails, it will attempt to restart
+    Ollama and retry the request.
+    
     Args:
         prompt: The prompt to send
         base_url: The base URL of the local LLM server
@@ -578,6 +652,8 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     Returns:
         str: The response text
     """
+    import time
+    
     # Get model from override, environment, or use default
     local_override = get_local_llm_override()
     if local_override and local_override.get("model"):
@@ -587,25 +663,37 @@ def _call_llm_local(prompt: str, base_url: str) -> str:
     
     headers = {"Content-Type": "application/json"}
     
-    # Try Ollama /api/chat endpoint first (current Ollama API)
-    # Include num_ctx to set context length for large codebases (128K tokens)
+    # Ollama /api/chat endpoint with context length
     ollama_chat_url = f"{base_url.rstrip('/')}/api/chat"
     ollama_chat_payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "options": {
-            "num_ctx": OLLAMA_CONTEXT_LENGTH,  # 128K context for 64GB+ RAM machines
+            "num_ctx": OLLAMA_CONTEXT_LENGTH,
         }
     }
     
-    try:
-        response = requests.post(ollama_chat_url, headers=headers, json=ollama_chat_payload, timeout=300)
-        response.raise_for_status()
-        return response.json()["message"]["content"]
-    except requests.exceptions.RequestException as e:
-        # Silent fallback - don't print error, just try next endpoint
-        pass
+    # Retry logic with auto-restart capability
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(ollama_chat_url, headers=headers, json=ollama_chat_payload, timeout=600)
+            response.raise_for_status()
+            return response.json()["message"]["content"]
+        except requests.exceptions.ConnectionError as e:
+            # Connection failed - try to restart Ollama
+            if attempt < max_retries - 1:
+                print(f"\n⚠️  Connection to Ollama lost. Attempting recovery...")
+                if ensure_ollama_running(base_url):
+                    print(f"   Retrying request (attempt {attempt + 2}/{max_retries})...")
+                    time.sleep(2)  # Brief pause before retry
+                    continue
+            # Fall through to OpenAI endpoint as last resort
+            break
+        except requests.exceptions.RequestException as e:
+            # Other errors - fall through to OpenAI endpoint
+            break
     
     # Fall back to OpenAI-compatible endpoint (works with LM Studio, vLLM, etc.)
     openai_url = f"{base_url.rstrip('/')}/v1/chat/completions"

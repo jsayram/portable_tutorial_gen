@@ -36,6 +36,8 @@ def check_for_local_llm() -> dict | None:
     """
     Check for running local LLM servers and prompt user if they want to use one.
     
+    If Ollama is detected but not running, offers to start it.
+    
     Returns:
         dict with 'url' and 'name' if user chooses a local LLM, None otherwise
     """
@@ -43,11 +45,35 @@ def check_for_local_llm() -> dict | None:
     if os.getenv(ENV_SKIP_LOCAL_LLM_DETECTION, "").lower() in ("1", "true", "yes"):
         return None
     
-    # Import detection function
-    from utils.call_llm import detect_local_llms
+    # Import detection and health check functions
+    from utils.call_llm import detect_local_llms, is_ollama_running, ensure_ollama_running
     
     print("Checking for local LLM servers...")
     detected = detect_local_llms()
+    
+    if not detected:
+        # Check if Ollama is installed but not running
+        import shutil
+        if shutil.which("ollama"):
+            print("\n⚠️  Ollama is installed but not running.")
+            try:
+                start_choice = input("Would you like to start Ollama? [Y/n]: ").strip().lower()
+                if start_choice in ("", "y", "yes"):
+                    if ensure_ollama_running():
+                        # Re-detect after starting
+                        detected = detect_local_llms()
+                    else:
+                        print("Failed to start Ollama. Using cloud provider.")
+                        return None
+                else:
+                    print("Using cloud provider.")
+                    return None
+            except KeyboardInterrupt:
+                print("\nUsing cloud provider.")
+                return None
+        else:
+            print("No local LLM servers detected.")
+            return None
     
     if not detected:
         print("No local LLM servers detected.")
@@ -79,6 +105,15 @@ def check_for_local_llm() -> dict | None:
             idx = int(choice) - 1
             if 0 <= idx < len(detected):
                 selected = detected[idx]
+                
+                # Verify the selected LLM is still running
+                if "ollama" in selected["name"].lower():
+                    if not is_ollama_running(selected["url"]):
+                        print(f"\n⚠️  {selected['name']} stopped responding.")
+                        if not ensure_ollama_running(selected["url"]):
+                            print("Failed to restart. Using cloud provider.")
+                            return None
+                
                 # Use first available model if any
                 model = selected["models"][0] if selected["models"] else None
                 print(f"✓ Using {selected['name']} at {selected['url']}")
